@@ -1,0 +1,38 @@
+[package]
+name = "autotext"
+version = "0.1.0"
+authors = ["veto"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "mylib"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "*"
+sqlite="*"
+regex = "*"
+cryptostream = "*"
+base64 = "*"
+openssl = { version = "*" }
+blake2 = "*"
+gdk-pixbuf = "*"
+
+
+[dependencies.gtk]
+version = "*"
+features = ["v3_22"]
+
+[dependencies.gdk]
+version = "*"
+
+[dependencies.glib]
+version = "*"
+
+[dependencies.gio]
+version = "*"
+features = ["v2_44"]
+
+

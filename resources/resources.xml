@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/org/calantas/autotext">
+    <file>main_window.glade</file>
+  </gresource>
+
+  <gresource prefix="/org/calantas/autotext">
+    <file>autotext128.png</file>
+  </gresource>
+</gresources>
