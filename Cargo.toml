@@ -1,0 +1,40 @@
+[package]
+name = "autotext"
+version = "0.1.0"
+authors = ["veto"]
+edition = "2021"
+
+
+[lib]
+name = "mylib"
+path = "src/lib.rs"
+
+[dependencies]
+rand = {version="0.10.1"}
+sqlite = {version="0.37.0"}
+regex = {version="1.12.3"}
+cryptostream = {version="0.3.3"}
+base64 = {version="0.22.1"}
+openssl = { version = "0.10" }
+blake2 = {version="0.10.6"}
+gdk-pixbuf = {version="0.18.5"}
+
+gtk = { version = "0.18.1" } 
+glib = "0.18"
+gio = "0.18"
+
+
+#[dependencies.gtk]
+#version  = {version="0.9.2"}
+#features = ["0.92"]
+
+#[dependencies.gdk]
+#version  = {version="0.18.2"}
+
+#[dependencies.glib]
+#version  = {version="0.22.7"}
+
+#[dependencies.gio]
+#version  = {version="0.22.0"}
+#features = ["v2_44"]
+
