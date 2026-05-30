@@ -2,37 +2,39 @@
 name = "autotext"
 version = "0.1.0"
 authors = ["veto"]
-edition = "2018"
+edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 name = "mylib"
 path = "src/lib.rs"
 
 [dependencies]
-rand = "*"
-sqlite="*"
-regex = "*"
-cryptostream = "*"
-base64 = "*"
+rand = {version="0.10.1"}
+sqlite = {version="0.37.0"}
+regex = {version="1.12.3"}
+cryptostream = {version="0.3.3"}
+base64 = {version="0.22.1"}
 openssl = { version = "*" }
-blake2 = "*"
-gdk-pixbuf = "*"
+blake2 = {version="0.8.1"}
+gdk-pixbuf = {version="0.22.0"}
+
+gtk = { version = "0.18.1" } 
+glib = "0.16"
+gio = "0.16"
 
 
-[dependencies.gtk]
-version = "*"
-features = ["v3_22"]
+#[dependencies.gtk]
+#version  = {version="0.9.2"}
+#features = ["0.92"]
 
-[dependencies.gdk]
-version = "*"
+#[dependencies.gdk]
+#version  = {version="0.18.2"}
 
-[dependencies.glib]
-version = "*"
+#[dependencies.glib]
+#version  = {version="0.22.7"}
 
-[dependencies.gio]
-version = "*"
-features = ["v2_44"]
-
+#[dependencies.gio]
+#version  = {version="0.22.0"}
+#features = ["v2_44"]
 
