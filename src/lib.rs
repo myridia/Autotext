@@ -1,14 +1,40 @@
-use base64::{decode, encode};
+use base64::{Engine as _, engine::general_purpose};
 use blake2::digest::{Update, VariableOutput};
-use blake2::VarBlake2b;
-use cryptostream::{read, write};
+use blake2::Blake2bVar;
+use cryptostream::write;
 use glib::clone;
-use gtk::prelude::*;
+use glib::StaticType;
+use glib::ToValue;
+use gtk::prelude::{
+    CellLayoutExt, CellRendererTextExt, GtkListStoreExtManual, ObjectExt, TextBufferExt,
+    TextViewExt, TreeModelExt, TreeViewColumnExt,
+};
 use gtk::{CellRendererText, ListStore, TreeView, TreeViewColumn};
-use openssl::symm::{Cipher, Crypter, Mode};
+use openssl::symm::Cipher;
 use regex::Regex;
-use std::io::Read;
 use std::io::Write;
+use std::path::PathBuf;
+
+fn exe_dir() -> PathBuf {
+    let mut path = std::env::current_exe().unwrap();
+    path.pop();
+    path.pop();
+    path.pop();
+    path
+}
+
+fn settings_path() -> String {
+    let mut p = exe_dir();
+    p.push("settings.db");
+    p.to_string_lossy().to_string()
+}
+
+fn database_path() -> String {
+    let mut p = exe_dir();
+    p.push("databases");
+    p.push("database.db");
+    p.to_string_lossy().to_string()
+}
 
 pub fn test() {
     let t = "hello world".to_string();
@@ -19,17 +45,15 @@ pub fn test() {
 }
 
 pub fn encrypt(t: String, password: String) -> String {
-    let mut hasher = VarBlake2b::new(16).unwrap();
-    hasher.update(password);
+    let mut hasher = Blake2bVar::new(16).unwrap();
+    hasher.update(password.as_bytes());
     let mut _key = [0u8; 16];
-    hasher.finalize_variable(|out| {
-        _key.copy_from_slice(out);
-    });
+    hasher.finalize_variable(&mut _key).unwrap();
     let src: &[u8] = &t.into_bytes();
     let key: Vec<_> = _key.to_vec();
 
     println!("Result: {:?}", key.len());
-    let iv: Vec<_> = decode("dB0Ej+7zWZWTS5JUCldWMg==").unwrap();
+    let iv: Vec<_> = general_purpose::STANDARD.decode("dB0Ej+7zWZWTS5JUCldWMg==").unwrap();
     let cipher = Cipher::aes_128_cbc();
     let mut encrypted = Vec::new();
     let mut bytes_written = 0;
@@ -41,20 +65,18 @@ pub fn encrypt(t: String, password: String) -> String {
         }
     }
 
-    let ct = encode(encrypted);
+    let ct = general_purpose::STANDARD.encode(encrypted);
     return ct;
 }
 
 pub fn decrypt(ct: String, password: String) -> String {
-    let mut hasher = VarBlake2b::new(16).unwrap();
-    hasher.update(password);
+    let mut hasher = Blake2bVar::new(16).unwrap();
+    hasher.update(password.as_bytes());
     let mut _key = [0u8; 16];
-    hasher.finalize_variable(|out| {
-        _key.copy_from_slice(out);
-    });
+    hasher.finalize_variable(&mut _key).unwrap();
     let key: Vec<_> = _key.to_vec();
-    let src: Vec<u8> = decode(ct).unwrap();
-    let iv: Vec<_> = decode("dB0Ej+7zWZWTS5JUCldWMg==").unwrap();
+    let src: Vec<u8> = general_purpose::STANDARD.decode(ct).unwrap();
+    let iv: Vec<_> = general_purpose::STANDARD.decode("dB0Ej+7zWZWTS5JUCldWMg==").unwrap();
     let mut decrypted = Vec::new();
     {
         let mut decryptor =
@@ -71,98 +93,104 @@ pub fn decrypt(ct: String, password: String) -> String {
 
 pub fn get_password() -> String {
     let mut password = "".to_string();
-    let connection = sqlite::open("settings.db").unwrap();
-    let mut cursor = connection
+    let connection = sqlite::open(&settings_path()).unwrap();
+    let statement = connection
         .prepare("SELECT password FROM databases WHERE [default] = 1 ")
-        .unwrap()
-        .cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        password = row[0].as_string().unwrap().to_string();
+        .unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        password = row.read::<&str, _>(0).to_string();
     }
     return password;
 }
 
 pub fn get_password_by_id(id: &String) -> String {
     let mut password = "".to_string();
-    let connection = sqlite::open("settings.db").unwrap();
+    let connection = sqlite::open(&settings_path()).unwrap();
     let sql = format!("SELECT password FROM databases WHERE id = {} LIMIT 1", id);
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        password = row[0].as_string().unwrap().to_string();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        password = row.read::<&str, _>(0).to_string();
     }
     return password;
 }
 
 pub fn get_save_password_by_id(id: &String) -> String {
     let mut save_password = "".to_string();
-    let connection = sqlite::open("settings.db").unwrap();
+    let connection = sqlite::open(&settings_path()).unwrap();
     let sql = format!(
         "SELECT save_password FROM databases WHERE id = {} LIMIT 1",
         id
     );
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        save_password = row[0].as_integer().unwrap().to_string();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        save_password = row.read::<i64, _>(0).to_string();
     }
     return save_password;
 }
 
 pub fn get_databases() -> ListStore {
     let model = ListStore::new(&[String::static_type(), String::static_type()]);
-    let connection = sqlite::open("settings.db").unwrap();
-    let mut cursor = connection.prepare("SELECT [database],cast([id] AS text),[password],cast([default] as text) FROM [databases] ORDER BY [id]").unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        model.insert_with_values(
-            None,
-            &[0, 1],
-            &[&row[0].as_string().unwrap(), &row[1].as_string().unwrap()],
-        );
+    let connection = sqlite::open(&settings_path()).unwrap();
+    let statement = connection.prepare("SELECT [database],cast([id] AS text),[password],cast([default] as text) FROM [databases] ORDER BY [id]").unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        let name = row.read::<&str, _>(0).to_string();
+        let id = row.read::<&str, _>(1).to_string();
+        model.insert_with_values(None, &[(0, &name), (1, &id)]);
     }
     model
 }
 
 pub fn create_and_fill_model_cat() -> ListStore {
     let model = ListStore::new(&[String::static_type(), String::static_type()]);
-    let connection = sqlite::open("databases/database.db").unwrap();
-    let mut cursor = connection
+    let connection = sqlite::open(&database_path()).unwrap();
+    let statement = connection
         .prepare("SELECT name, cast(id as text) FROM categories ORDER BY sort, name ")
-        .unwrap()
-        .cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        model.insert_with_values(
-            None,
-            &[0, 1],
-            &[&row[0].as_string().unwrap(), &row[1].as_string().unwrap()],
-        );
+        .unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        let name = row.read::<&str, _>(0).to_string();
+        let id = row.read::<&str, _>(1).to_string();
+        model.insert_with_values(None, &[(0, &name), (1, &id)]);
     }
     model
 }
 
 pub fn create_and_fill_model_subcat(id: &String) -> ListStore {
     let model = ListStore::new(&[String::static_type(), String::static_type()]);
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!("SELECT name, cast(id as text) FROM subcategories WHERE category_id = {} ORDER BY sort, name", id );
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        model.insert_with_values(
-            None,
-            &[0, 1],
-            &[&row[0].as_string().unwrap(), &row[1].as_string().unwrap()],
-        );
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        let name = row.read::<&str, _>(0).to_string();
+        let id = row.read::<&str, _>(1).to_string();
+        model.insert_with_values(None, &[(0, &name), (1, &id)]);
     }
     model
 }
 
 pub fn get_subcategory_by_id(id: &String) -> String {
     let mut ret = "".to_string();
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!(
         "SELECT content FROM subcategories WHERE id = {} LIMIT 1",
         id
     );
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        let content = row[0].as_string().unwrap().to_string();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        let content = row.read::<&str, _>(0).to_string();
         ret = content;
     }
     return ret;
@@ -175,15 +203,16 @@ pub fn append_column(
     store: &ListStore,
     cat_id: &str,
 ) {
+    use gtk::prelude::TreeViewExt;
     let _cat_id = string_to_static_str(cat_id.to_string());
     let col = TreeViewColumn::new();
     let cell = CellRendererText::new();
-    let _e = cell.set_property("editable", &true);
+    let _e = cell.set_property("editable", true);
 
     cell.connect_edited(
         clone!(@weak store => move |_cellrenderertext, path, new_text|
         {
-         if let Some(iter) = store.get_iter(&path) //set the new text to the list column
+         if let Some(iter) = store.iter(&path)
          {
            store.set_value(&iter, 0, &new_text.to_value());
          }
@@ -200,13 +229,11 @@ pub fn append_column(
     );
 
     col.set_title(title);
-    col.pack_start(&cell, true);
-    col.add_attribute(&cell, "text", id);
-    let ocol = tree.get_n_columns();
+    CellLayoutExt::pack_start(&col, &cell, true);
+    CellLayoutExt::add_attribute(&col, &cell, "text", id);
+    let ocol = tree.n_columns();
     if ocol > 0 {
-        let n = tree.get_column(0).unwrap();
-        //println!("n: {:?}",n);
-        //println!("coln: {:?}",&ocol);
+        let n = tree.column(0).unwrap();
         tree.remove_column(&n);
     }
 
@@ -220,18 +247,20 @@ fn string_to_static_str(s: String) -> &'static str {
 pub fn update_category_name(new_name: String, id: String) {
     println!("Update Category {:?}", id);
     let mut _id = "".to_string();
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!(
         "SELECT name, cast(id as text) id FROM categories ORDER BY sort, name LIMIT {},1",
         id
     );
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        _id = row[1].as_string().unwrap().to_string();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        _id = row.read::<&str, _>(1).to_string();
     }
 
     let re = Regex::new(r"[^a-zA-Z\d\s:_-]").unwrap();
-    let clean_name = re.replace_all(&new_name, "");
+    let _clean_name = re.replace_all(&new_name, "");
     let sql2 = format!(
         "UPDATE categories SET name = '{0}' WHERE id = {1} ",
         new_name, _id
@@ -244,12 +273,13 @@ pub fn update_category_name(new_name: String, id: String) {
 pub fn update_subcategory_name(new_name: String, id: String, cat_id: &str) {
     //println!("Update Sucategory");
     let mut _id = "".to_string();
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!("SELECT name ,cast(id as text) id FROM subcategories WHERE category_id = {0} ORDER BY sort, name  LIMIT {1},1", cat_id,id  );
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-
-    while let Some(row) = cursor.next().unwrap() {
-        _id = row[1].as_string().unwrap().to_string();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        _id = row.read::<&str, _>(1).to_string();
     }
 
     let re = Regex::new(r"[^a-zA-Z\d\s:_-]").unwrap();
@@ -265,7 +295,7 @@ pub fn update_subcategory_name(new_name: String, id: String, cat_id: &str) {
 
 pub fn add_category() {
     println!("add cat row");
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!("INSERT INTO categories(name)VALUES('')");
     println!("{:?}", sql);
     let _r = connection.execute(&sql);
@@ -273,7 +303,7 @@ pub fn add_category() {
 
 pub fn delete_category(id: &String) {
     println!("delete cat row");
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!("DELETE FROM categories WHERE id = {}", id);
     println!("{:?}", sql);
     let _r = connection.execute(&sql);
@@ -286,17 +316,19 @@ pub fn delete_category(id: &String) {
 pub fn delete_subcategory(id: &String) -> String {
     println!("delete subcat row");
     let mut category_id = "".to_string();
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!(
         "SELECT cast(category_id as TEXT) catetgory_id FROM subcategories WHERE id = {0} LIMIT 1",
         id
     );
     //println!("{:?}", sql);
 
-    let mut cursor = connection.prepare(sql).unwrap().cursor();
-    while let Some(row) = cursor.next().unwrap() {
-        category_id = row[0].as_string().unwrap().to_string();
-        let connection = sqlite::open("databases/database.db").unwrap();
+    let statement = connection.prepare(sql).unwrap();
+    let mut cursor = statement.into_iter();
+    while let Some(row) = cursor.next() {
+        let row = row.unwrap();
+        category_id = row.read::<&str, _>(0).to_string();
+        let connection = sqlite::open(&database_path()).unwrap();
         let sql = format!("DELETE FROM subcategories WHERE id = {}", id);
         //println!("{:?}",sql);
         let _r = connection.execute(&sql);
@@ -308,7 +340,7 @@ pub fn delete_subcategory(id: &String) -> String {
 
 pub fn add_subcategory(id: &String, textview: &String) {
     println!("add subcat row {:?}", id);
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!(
         "INSERT INTO subcategories(name,category_id,content)VALUES('',{0},'{1}')",
         id,
@@ -320,7 +352,7 @@ pub fn add_subcategory(id: &String, textview: &String) {
 
 pub fn update_subcategory(id: &String, textview: &String) {
     println!("add subcat row {:?}", id);
-    let connection = sqlite::open("databases/database.db").unwrap();
+    let connection = sqlite::open(&database_path()).unwrap();
     let sql = format!(
         "UPDATE subcategories SET content = '{0}' WHERE id = {1}",
         textview.to_string(),
@@ -331,10 +363,10 @@ pub fn update_subcategory(id: &String, textview: &String) {
 }
 
 pub fn get_textview(textview: &gtk::TextView) -> String {
-    let buffer = textview.get_buffer().unwrap();
-    let start = buffer.get_start_iter();
-    let end = buffer.get_end_iter();
-    let g = buffer.get_text(&start, &end, true).unwrap();
+    let buffer = textview.buffer().unwrap();
+    let start = buffer.start_iter();
+    let end = buffer.end_iter();
+    let g = buffer.text(&start, &end, true).unwrap();
     let s = g.as_str().to_string();
     return s;
 }
