@@ -328,6 +328,7 @@ let logo = Pixbuf::from_file_at_scale(logo_path,200,200,false).unwrap();
 
 fn main()
 {
+  mylib::init_dbs();
   let app = gtk::Application::new(Some("org.calanatas.autotext"), Default::default());
   app.connect_activate(|app| {
      build_ui(app);             

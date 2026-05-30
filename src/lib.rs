@@ -15,23 +15,66 @@ use regex::Regex;
 use std::io::Write;
 use std::path::PathBuf;
 
-fn exe_dir() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop();
-    path.pop();
-    path.pop();
+fn data_dir() -> PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    let mut path = PathBuf::from(home);
+    path.push(".autotext");
     path
 }
 
+pub fn init_dbs() {
+    let dir = data_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let settings = dir.join("settings.db");
+    if !settings.exists() {
+        let conn = sqlite::open(&settings).unwrap();
+        conn.execute(
+            "CREATE TABLE databases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                database TEXT DEFAULT '',
+                password TEXT DEFAULT '',
+                save_password INTEGER DEFAULT 0,
+                [default] INTEGER DEFAULT 0
+            )",
+        )
+        .unwrap();
+    }
+
+    let db = dir.join("database.db");
+    if !db.exists() {
+        let conn = sqlite::open(&db).unwrap();
+        conn.execute(
+            "CREATE TABLE categories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT DEFAULT '',
+                sort INTEGER DEFAULT 0
+            )",
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE subcategories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT DEFAULT '',
+                category_id INTEGER DEFAULT 0,
+                content TEXT DEFAULT '',
+                sort INTEGER DEFAULT 0
+            )",
+        )
+        .unwrap();
+    }
+}
+
 fn settings_path() -> String {
-    let mut p = exe_dir();
+    let mut p = data_dir();
     p.push("settings.db");
     p.to_string_lossy().to_string()
 }
 
 fn database_path() -> String {
-    let mut p = exe_dir();
-    p.push("databases");
+    let mut p = data_dir();
     p.push("database.db");
     p.to_string_lossy().to_string()
 }
