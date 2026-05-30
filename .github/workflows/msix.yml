@@ -1,0 +1,123 @@
+name: Windows
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write 
+  issues: read
+  packages: none
+  
+jobs:
+  build-msix:
+    runs-on: windows-latest 
+    if: github.repository_owner == 'myridiax'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+           # winget install --id Microsoft.MSIXPackagingTool -e --accept-source-agreements --accept-package-agreements --silent
+           winget install microsoft.winappcli --source winget 
+
+      - name: Download_exe 
+        run: |
+         curl -L "https://github.com/myridia/ct/releases/download/main/ct.exe" -o "./ct.exe"
+         
+      - name: Certificate 
+        run: |
+          # $folder = "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\"
+          # $currentPath = $env:Path
+          # $env:Path = "$folder;$currentPath"
+          $pass = ConvertTo-SecureString "passpass" -AsPlainText -Force
+          $loc = "Cert:\CurrentUser\My"
+          # $cert = New-SelfSignedCertificate -Subject "CN=Myridia" -CertStoreLocation $loc -KeyExportPolicy Exportable -KeyUsage DigitalSignature -FriendlyName "Myridia Certificate"
+            $cert = New-SelfSignedCertificate -Subject "CN=Myridia" -CertStoreLocation $loc -KeyExportPolicy Exportable -KeyUsage CertSign,CrlSign -FriendlyName "Myridia Root CA"
+          if ($cert) {
+            $certp = "Cert:\CurrentUser\My\$($cert.Thumbprint)"
+            Export-PfxCertificate  -cert $certp  -FilePath ".\Myridia.pfx" -Password $pass -Force
+            Export-Certificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" -FilePath ".\Myridia.cer" -Force 
+            certutil -addstore Root ".\Myridia.cer"
+
+          } else {
+            Write-Error "Certificate generation failed."
+          }
+
+          $caCert = Get-ChildItem -Path $loc | Where-Object { $_.Subject -eq "CN=Myridia" }
+          $cert = New-SelfSignedCertificate  -Signer $caCert -Subject "CN=Ct" -CertStoreLocation $loc -KeyExportPolicy Exportable -KeyUsage DigitalSignature -FriendlyName "CT Certificate" -Type CodeSigningCert
+          if ($cert) {
+            $certp = "Cert:\CurrentUser\My\$($cert.Thumbprint)"
+            Export-PfxCertificate  -cert $certp  -FilePath ".\Ct.pfx" -Password $pass -Force
+            Export-Certificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" -FilePath ".\Ct.cer" -Force 
+            certutil -addstore Root ".\Myridia.cer"
+          } else {
+            Write-Error "Certificate generation failed."  
+          }
+
+      - name: Sign  
+        run: |
+          dir
+          $cert2 = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(".\Ct.pfx", "passpass")
+          Set-AuthenticodeSignature -FilePath ".\ct.exe" -Certificate $cert2
+          
+      - name: Packing  
+        run: |    
+          # msixpw package --applicationFile "ct.exe"  --fileType "EXE"  --packageName "Ct"  --packageVersion "1.0.0"  --publisher "CN=Ct"  --publisherDisplayName "Ct" --outDir ".\AppPackages"  --sign  --certificatePath "Ct.pfx"  --password "passpass"  --targetPlatforms "x64"   
+          # MsixPackagingTool.exe create-package --template template.xml
+          # winapp manifest generate
+          # cat Package.appxmanifest 
+          # winapp pack . --cert Ct.pfx
+          dir 
+          mkdir app 
+          cp ct.exe app\
+          cd app 
+          winapp manifest generate --executable .\ct.exe  --package-name "Ct" --publisher-name "Ct"
+          winapp pack . --cert "..\Ct.pfx" --cert-password "passpass" --output "ct.msix" --name "Ct"
+          dir 
+       
+      - name: Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: |
+            app/ct.msix  
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+      - name: Release_cert
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: |
+            Myridia.cer
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+      - name: Release_cert2
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: |
+            Ct.cer
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+      - name: Release_cert3
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: |
+            Ct.pfx
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+ 

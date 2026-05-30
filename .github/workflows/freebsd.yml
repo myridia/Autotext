@@ -1,0 +1,61 @@
+name: Build FreeBSD Release
+on:
+  workflow_run:
+    workflows: ["release_linux"]
+    types:
+      - completed
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write 
+  issues: read
+  packages: none
+
+jobs:
+  build_freebsd:
+    if: github.repository_owner == 'myridiax'
+    runs-on: ubuntu-22.04
+    name: A job to run FreeBSD
+    env:
+      MYTOKEN : ${{ secrets.MYTOKEN }}
+      MYTOKEN2: "value2"
+    steps:
+    - uses: actions/checkout@v4
+    - name: VM FreeBSD
+      id: freebsd_id
+      uses: vmactions/freebsd-vm@v1
+      with:
+        envs: 'MYTOKEN MYTOKEN2'
+        usesh: true
+        prepare: |
+          pkg install -y curl 
+          pkg install -y cmake 
+          
+        name: install rustup in freebsd
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          . "$HOME/.cargo/env"
+          rustup target list
+          cargo build --target x86_64-unknown-freebsd --release 
+          ls target/x86_64-unknown-freebsd/release
+          cp target/x86_64-unknown-freebsd/release/mtranslate target/x86_64-unknown-freebsd/release/mtranslate_freebsd
+          #ls target/x86_64-unknown-freebsd/release -all
+
+          
+    - name: Upload freeBSD Binary to release
+      uses: svenstaro/upload-release-action@v2
+      with:
+        run: | 
+          ls target/x86_64-unknown-freebsd/release -all
+          file target/x86_64-unknown-freebsd/release/mtranslate_freebsd 
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file:  target/x86_64-unknown-freebsd/release/mtranslate_freebsd
+        tag: ${{ github.ref }}
+        overwrite: true
+        file_glob: true
+
+          
+
+          
+
+          

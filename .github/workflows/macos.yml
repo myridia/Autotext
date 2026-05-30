@@ -1,0 +1,71 @@
+name: Macos
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write 
+  issues: read
+  packages: none
+
+jobs:
+  Build:
+    runs-on: macos-15
+    if: github.repository_owner == 'myridiax'
+
+    steps:
+      - name: Install Rust
+        run: |
+          brew install llvm tree 
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup target add x86_64-apple-darwin
+          rustup component add llvm-tools-preview
+          cargo --version 
+          
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile 
+        run: |
+          cargo build --release  --target x86_64-apple-darwin 
+          cargo build --release  
+      - name: List
+        run: |
+          cd target
+          tree . 
+      - name: Rename
+        run: |
+          cp target/release/ct ct_macos.app
+          cp target/x86_64-apple-darwin/release/ct ct_macos_intel.app
+          hdiutil create -volname "ct_macos" -srcfolder "ct_macos.app" -ov -format UDZO "ct_macos.dmg"
+          hdiutil create -volname "ct_macos_intel" -srcfolder "ct_macos_intel.app" -ov -format UDZO "ct_macos_intel.dmg"
+
+
+
+      - name: Release Intel 
+        if: github.repository_owner == 'myridia'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: 'ct_macos_intel.dmg'
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true   
+
+      - name: Release Silicon
+        if: github.repository_owner == 'myridia'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: 'ct_macos.dmg'
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true 
+
+    
+          
