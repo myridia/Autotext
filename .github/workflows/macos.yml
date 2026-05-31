@@ -15,7 +15,7 @@ permissions:
 jobs:
   Build:
     runs-on: macos-15
-    if: github.repository_owner == 'myridiax'
+    if: github.repository_owner == 'myridia'
 
     steps:
       - name: Install Rust
@@ -42,28 +42,28 @@ jobs:
       - name: Rename
         run: |
           cp target/release/ct ct_macos.app
-          cp target/x86_64-apple-darwin/release/ct ct_macos_intel.app
-          hdiutil create -volname "ct_macos" -srcfolder "ct_macos.app" -ov -format UDZO "ct_macos.dmg"
-          hdiutil create -volname "ct_macos_intel" -srcfolder "ct_macos_intel.app" -ov -format UDZO "ct_macos_intel.dmg"
+          cp target/x86_64-apple-darwin/release/autotext autotext_macos_intel.app
+          hdiutil create -volname "autotext_macos" -srcfolder "autotext_macos.app" -ov -format UDZO "autotext_macos.dmg"
+          hdiutil create -volname "autotext_macos_intel" -srcfolder "autotext_macos_intel.app" -ov -format UDZO "autotext_macos_intel.dmg"
 
 
 
       - name: Release Intel 
-        if: github.repository_owner == 'myridia'
+        if: github.repository_owner == 'myridiax'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: 'ct_macos_intel.dmg'
+          file: 'autotext_macos_intel.dmg'
           tag: ${{ github.ref }}
           overwrite: true
           file_glob: true   
 
       - name: Release Silicon
-        if: github.repository_owner == 'myridia'
+        if: github.repository_owner == 'myridiax'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: 'ct_macos.dmg'
+          file: 'autotext_macos.dmg'
           tag: ${{ github.ref }}
           overwrite: true
           file_glob: true 
