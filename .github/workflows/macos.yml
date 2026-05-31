@@ -1,117 +1,136 @@
-name: Autotext
+name: Build and Release macOS Apps
 
 on:
   push:
     branches: ["main"]
     tags:
-      - '*'
-  workflow_dispatch:
+      - '*' # Trigger on any tag push
+  workflow_dispatch: # Allow manual trigger
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: read
-  packages: none
+  contents: write # Needed for uploading releases
+  # Add other permissions if your project requires them
 
 jobs:
-  Build:
-    runs-on: macos-15
-    if: github.repository_owner == 'myridia' # Assuming 'myridia' is your organization/user
+  build_and_release:
+    runs-on: macos-15 # Use a recent macOS runner (e.g., macos-15, macos-latest)
+    # Only run this job if the repository is owned by 'myridia' (or your organization/user)
+    # Adjust 'myridia' to your actual GitHub username or organization name
+    if: github.repository_owner == 'myridia'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Use a recent version
 
-      - name: Install Homebrew
-        uses: Homebrew/actions/install-homebrew@master
-        # You might want to configure the token if you use private Homebrew taps
-        # with:
-        #   token: ${{ steps.authenticate.outputs.token }}
+      - name: Setup Homebrew
+        uses: actions/setup-homebrew@v4 # Official Homebrew setup action
+        id: setup-homebrew
 
-      - name: Install GLib
+      - name: Install GLib development files
         run: brew install glib
 
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable # Or your desired toolchain
+          toolchain: stable # Use your desired Rust toolchain (e.g., stable, beta, nightly)
           override: true
-          profile: minimal
+          profile: minimal # Minimal installation is usually sufficient
 
-      - name: Setup cross-compilation target and build
-        env:
-          # This is the crucial part: Tell pkg-config where to find GLib's .pc files
-          PKG_CONFIG_PATH: "/usr/local/opt/glib/lib/pkgconfig:/usr/local/lib/pkgconfig"
-          # You might need to adjust the path slightly depending on your Homebrew setup.
-          # A more robust way is to dynamically find it:
-          # PKG_CONFIG_PATH: $(brew --prefix glib)/lib/pkgconfig:$(brew --prefix glib)/share/pkgconfig
+      - name: Install cross-compilation target
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Determine pkg-config path for GLib
+        id: pkgconfig_path
         run: |
-          rustup target add x86_64-apple-darwin
-          # Build for the cross-compiled target first
+          # Dynamically find the GLib pkgconfig path
+          GLIB_PREFIX=$(brew --prefix glib)
+          echo "GLIB_PREFIX=${GLIB_PREFIX}"
+          echo "PKG_CONFIG_PATH=${GLIB_PREFIX}/lib/pkgconfig:${GLIB_PREFIX}/share/pkgconfig" >> $GITHUB_ENV
+          echo "::add-mask::${GLIB_PREFIX}" # Mask the path from logs if sensitive
+
+      - name: Build native (ARM) and Intel binaries
+        env:
+          # PKG_CONFIG_PATH is now set in the previous step using $GITHUB_ENV
+          # This ensures pkg-config finds GLib for cross-compilation
+        run: |
+          echo "Building native (ARM) binary..."
+          cargo build --release # Builds for the runner's native architecture (likely ARM on macos-15)
+
+          echo "Building Intel (x86_64) binary..."
           cargo build --release --target x86_64-apple-darwin
-          # Then build for the native target of the runner (if needed)
-          cargo build --release
 
       - name: List build artifacts
         run: |
           cd target
-          tree .
-
-      # --- Renaming and DMG creation ---
-      # NOTE: The renaming logic below might need adjustment.
-      #       `cargo build --release` on macOS-15 builds for 'x86_64-apple-darwin' by default.
-      #       The `ct ct_macos.app` seems to be an executable.
-      #       The DMG creation needs the correct path to the app bundle.
+          tree . # Visualize the build output structure
 
       - name: Prepare application bundles
         run: |
-          # Assuming 'ct' is your main executable that should be an app bundle
-          # If it's not an app bundle, this step needs significant changes.
-          # For simplicity, let's assume 'ct' is the name of your binary.
-          # You'll likely need to create an actual .app bundle structure.
-          # This is a placeholder to get the names right for DMG creation.
+          # --- IMPORTANT ---
+          # This section assumes 'ct' is your main executable.
+          # You MUST create proper macOS .app bundles for distribution.
+          # This includes an Info.plist file and placing the executable correctly.
+          # The following is a SIMPLIFIED example to get files named correctly for DMG creation.
 
-          # For native macOS build (default architecture of the runner, likely x86_64-apple-darwin on macos-15)
-          # If macos-15 is ARM, the native target would be aarch64-apple-darwin
-          # but you are explicitly targeting x86_64-apple-darwin for intel.
-          # Let's assume 'ct' is the output for the native build.
-          echo "Moving native build output..."
+          # Create ARM bundle (for autotext_macos.dmg)
+          echo "Creating ARM app bundle structure..."
           mkdir -p autotext_macos.app/Contents/MacOS
-          cp target/release/ct autotext_macos.app/Contents/MacOS/autotext
-          # You'll need to add Info.plist, Resources etc. for a proper .app bundle
+          cp target/release/ct autotext_macos.app/Contents/MacOS/autotext # Assumes native build is ARM
+          # Create a dummy Info.plist (REPLACE THIS WITH YOUR ACTUAL Info.plist)
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>autotext</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.yourcompany.autotext</string> <!-- CHANGE THIS -->
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>autotext</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.0</string> <!-- CHANGE THIS -->
+              <key>CFBundleVersion</key>
+              <string>1.0.0</string> <!-- CHANGE THIS -->
+          </dict>
+          </plist>' > autotext_macos.app/Contents/Info.plist
 
-          # For the explicitly cross-compiled Intel build
-          echo "Moving intel build output..."
+          # Create Intel bundle (for autotext_macos_intel.dmg)
+          echo "Creating Intel app bundle structure..."
           mkdir -p autotext_macos_intel.app/Contents/MacOS
           cp target/x86_64-apple-darwin/release/ct autotext_macos_intel.app/Contents/MacOS/autotext
-          # You'll need to add Info.plist, Resources etc. for a proper .app bundle
+          # Use the same Info.plist, or a specific one if needed
+          cp autotext_macos.app/Contents/Info.plist autotext_macos_intel.app/Contents/Info.plist
 
-      - name: Create DMG for native build (assuming ARM if on M1/M2 macos runner)
+      - name: Create DMG for ARM build
         run: |
-          # Note: 'autotext_macos.app' should be the ARM version if your runner is ARM.
-          # If your runner is Intel, this would be x86_64.
-          # The name 'autotext_macos.dmg' implies ARM build.
+          echo "Creating DMG for ARM build..."
           hdiutil create -volname "autotext_macos" -srcfolder "autotext_macos.app" -ov -format UDZO "autotext_macos.dmg"
 
       - name: Create DMG for Intel build
         run: |
+          echo "Creating DMG for Intel build..."
           hdiutil create -volname "autotext_macos_intel" -srcfolder "autotext_macos_intel.app" -ov -format UDZO "autotext_macos_intel.dmg"
 
-
-      - name: Release Intel DMG
-        if: github.repository_owner == 'myridia' # Use your actual owner name
+      - name: Upload Intel DMG to Release
+        # Only run if the push was to a tag AND the repo owner is correct
+        if: github.event_name == 'push' && github.ref_type == 'tag' && github.repository_owner == 'myridia'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: 'autotext_macos_intel.dmg'
-          tag: ${{ github.ref }}
+          tag: ${{ github.ref }} # Use the tag that triggered the workflow
           overwrite: true
 
-      - name: Release Silicon DMG
-        if: github.repository_owner == 'myridia' # Use your actual owner name
+      - name: Upload ARM DMG to Release
+        # Only run if the push was to a tag AND the repo owner is correct
+        if: github.event_name == 'push' && github.ref_type == 'tag' && github.repository_owner == 'myridia'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: 'autotext_macos.dmg'
-          tag: ${{ github.ref }}
+          tag: ${{ github.ref }} # Use the tag that triggered the workflow
           overwrite: true
