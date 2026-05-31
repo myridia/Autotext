@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust
         run: |
           brew install llvm tree 
-          brew install gtk+3 openssl pkg-config  
+          brew install gtk+3 openssl pkg-config glib
           curl https://sh.rustup.rs -sSf | sh -s -- -y
           source $HOME/.cargo/env
           rustup target add x86_64-apple-darwin
