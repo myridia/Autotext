@@ -36,7 +36,8 @@ jobs:
           pacman -Syu --noconfirm mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-openssl
      
       - name: Build
-        run: |          
+        run: |       
+          cargo build --release 
           # pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
           # cargo build --release --target x86_64-pc-windows-gnu 
           # cd target/x86_64-pc-windows-gnu/release/
