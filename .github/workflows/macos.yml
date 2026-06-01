@@ -45,6 +45,7 @@ jobs:
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH" 
           export CC="/opt/homebrew/opt/llvm/bin/clang"
           export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+          export RUSTFLAGS="-C linker=/usr/bin/ld"
           cargo build --release --target x86_64-apple-darwin
           
 
