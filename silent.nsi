@@ -1,0 +1,12 @@
+SilentInstall silent
+AutoCloseWindow true
+ShowInstDetails hide
+OutFile "Tamuz.exe"
+Icon "salamander.ico"
+Section ""
+  SetOutPath "$TEMP\Autotext"
+  File /r "*.dll"
+  File "*.exe"
+  ExecWait "$TEMP\Autotext\autotext.exe"
+  RMDir /r "$TEMP\Autotext"
+SectionEnd
