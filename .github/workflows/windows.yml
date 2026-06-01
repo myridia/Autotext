@@ -53,20 +53,15 @@ jobs:
         run: | 
           export PATH="$PATH:/c/Users/runneradmin/.cargo/bin"
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
-          cargo build
-          # echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8NoBOM -Append
           cargo build --release 
-          # pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
-          # cargo build --release --target x86_64-pc-windows-gnu 
-          # cd target/x86_64-pc-windows-gnu/release/
-          # dir 
+       
            
       - name: Release
-        if: github.repository_owner == 'myridiax'                  
+        if: github.repository_owner == 'myridia'                  
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: 'target/x86_64-pc-windows-gnu/release/autotext.exe'
+          file: 'target/release/autotext.exe'
           tag: ${{ github.ref }}
           overwrite: true
           file_glob: true
