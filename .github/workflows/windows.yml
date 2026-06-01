@@ -15,7 +15,7 @@ permissions:
 jobs:
   Build:
     runs-on: windows-latest
-    if: github.repository_owner == 'myridiax'
+    if: github.repository_owner == 'myridia'
 
     steps:
       - name: Checkout
