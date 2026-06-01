@@ -1,8 +1,8 @@
 SilentInstall silent
 AutoCloseWindow true
 ShowInstDetails hide
-OutFile "Autotext.exe"
-Icon "autotext.ico"
+OutFile "Autotext2.exe"
+Icon "resources/autotext128.ico"
 Section ""
   SetOutPath "$TEMP\Autotext"
   File /r "*.dll"
