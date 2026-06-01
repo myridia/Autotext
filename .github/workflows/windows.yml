@@ -63,7 +63,7 @@ jobs:
           cp target/release/*.exe .
           ldd target/release/*.exe | grep mingw64 | awk '{print $3}' | xargs -I{} cp {} .
           
-      - name: Upload
+      - name: Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-binary
