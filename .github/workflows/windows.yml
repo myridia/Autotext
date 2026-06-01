@@ -27,9 +27,94 @@ jobs:
           toolchain: nightly 
           target: x86_64-pc-windows-gnu 
 
+name: Windows Build
+
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  packages: none
+
+jobs:
+  Build-Windows:
+    runs-on: windows-latest
+    if: github.repository_owner == 'myridia'
+
+    steps:
+      - name: Install Rust and Dependencies
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          source $env:USERPROFILE\.cargo\env
+          rustup target add x86_64-pc-windows-gnu
+          rustup component add llvm-tools-preview
+          winget install --id=The.OpenGroup.base-containers.MinGW-W64-ucrt-x86_64 --accept-package-agreements --source winget
+          $msys2_root = "C:\msys64"
+          $env:PATH = "$msys2_root\usr\bin;$msys2_root\mingw64\bin;$env:PATH"
+          pacman -Syu --noconfirm mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-glib2 mingw-w64-ucrt-x86_64-openssl
+          if ! command -v pkg-config &> /dev/null; then exit 1; fi
+          if ! pkg-config --exists gtk+-3.0; then exit 1; fi
+          cargo --version
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile for Windows (x86_64 GNU)
+        run: |
+          source $env:USERPROFILE\.cargo\env
+          $msys2_root = "C:\msys64"
+          $env:PKG_CONFIG_PATH = "$msys2_root\mingw64\lib\pkgconfig;$msys2_root\mingw64\share\pkgconfig;$env:PKG_CONFIG_PATH"
+          export PKG_CONFIG_ALLOW_CROSS=1
+          $env:CC = "gcc.exe"
+          $env:CXX = "g++.exe"
+          cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: List Compiled Binaries
+        run: |
+          cd target\x86_64-pc-windows-gnu\release
+          dir autotext.exe
+
+      - name: Create Windows Installer (NSIS)
+        run: |
+          winget install --id=NSIS.NSIS -e --accept-package-agreements --source winget
+          $nsi_content = @"
+          Name "Autotext Installer"
+          OutFile "autotext_setup.exe"
+          InstallDir "$PROGRAMFILES64\Autotext"
+          Section "Application"
+            SetOutPath "$INSTDIR"
+            File "target\x86_64-pc-windows-gnu\release\autotext.exe"
+          SectionEnd
+          "@
+          $nsi_content | Out-File -FilePath autotext.nsi -Encoding utf8
+          $nsis_exe = "$env:ProgramFiles\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis_exe)) {
+              $nsis_exe = "$env:ProgramFiles(x86)\NSIS\makensis.exe"
+          }
+          if (-not (Test-Path $nsis_exe)) { exit 1; }
+          & "$nsis_exe" autotext.nsi
+
+      - name: Upload Release
+        if: github.repository_owner == 'myridiax' && github.ref_type == 'tag' && success()
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: 'autotext_setup.exe'
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+
+
       - name: Build
         run: |          
-          pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
+          #pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
           cargo build --release --target x86_64-pc-windows-gnu 
           cd target/x86_64-pc-windows-gnu/release/
           dir 
