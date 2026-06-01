@@ -32,7 +32,16 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-x86_64-pkg-config mingw-w64-x86_64-glib2 mingw-w64-ucrt-x86_64-gtk3 
+          install: > 
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-glib2
+            mingw-w64-ucrt-x86_64-gtk3
+            mingw-w64-x86_64-pango
+            mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-gdk-pixbuf2
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-rust
      
       - name: Compile
         shell: msys2 {0}
