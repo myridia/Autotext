@@ -1,4 +1,5 @@
 name: Macos
+
 on:
   push:
     branches: ["main"]
@@ -20,16 +21,38 @@ jobs:
     steps:
       - name: Install Rust and Dependencies
         run: |
-          brew install llvm tree pkg-config glib gobject-introspection openssl gtk+3
+          # Install Homebrew if not present
+          if ! command -v brew &> /dev/null; then
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          fi
+          brew update
+          # Install core dependencies for GLib/GObject/GTK development
+          brew install pkg-config glib gobject-introspection openssl gtk+3
+          # Install LLVM and tree
+          brew install llvm tree
+
+          # Install Rust
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
           source $HOME/.cargo/env
           rustup target add x86_64-apple-darwin
           rustup component add llvm-tools-preview
+
+          # --- Critical: Configure pkg-config for cross-compilation ---
+          # Set PKG_CONFIG_PATH to include Homebrew's lib/pkgconfig directories.
+          # This helps pkg-config find the .pc files for the libraries installed by brew.
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
+          # Explicitly allow cross-compilation
           export PKG_CONFIG_ALLOW_CROSS=1
+
+          # Set CC/CXX to use LLVM's clang, which is more likely to work with cross-compilation targets
           export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
           export CC="/opt/homebrew/opt/llvm/bin/clang"
           export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
+          # Verify pkg-config can find GLib and GTK for the host
+          if ! pkg-config --exists glib-2.0; then echo "ERROR: pkg-config cannot find glib-2.0"; exit 1; fi
+          if ! pkg-config --exists gtk+-3.0; then echo "ERROR: pkg-config cannot find gtk+-3.0"; exit 1; fi
+          echo "Dependencies and pkg-config seem correctly set up for the host."
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +63,16 @@ jobs:
 
       - name: Compile Intel macOS (x86_64)
         run: |
+          # Re-export necessary variables for this step
+          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          export CC="/opt/homebrew/opt/llvm/bin/clang"
+          export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
+          # Use the system linker, as ld64.lld was not found
           export RUSTFLAGS="-C linker=/usr/bin/ld"
+
           cargo build --release --target x86_64-apple-darwin
 
       - name: List Compiled Binaries
