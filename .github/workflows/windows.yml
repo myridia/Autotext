@@ -34,15 +34,14 @@ jobs:
           $msys2_root = "C:\msys64" # Default installation path. Adjust if different.
           $env:PATH = "$msys2_root\usr\bin;$msys2_root\mingw64\bin;$env:PATH"
           pacman -Syu --noconfirm
-          echo "MSYS2 (and pacman) installed and configured."
-
+          pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl 
 
       - name: Build
         run: |          
-          pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
+          # pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
           # cargo build --release --target x86_64-pc-windows-gnu 
           # cd target/x86_64-pc-windows-gnu/release/
-          # dir 
+          dir 
            
       - name: Release
         if: github.repository_owner == 'myridiax'                  
