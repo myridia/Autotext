@@ -15,20 +15,20 @@ permissions:
 jobs:
   Build:
     runs-on: windows-latest
-    if: github.repository_owner == 'myridiax'
+    if: github.repository_owner == 'myridia'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
           
-      - name: Install Rust          
+      - name: Rust          
         uses: actions-rs/toolchain@v1 
         with:
           toolchain: nightly 
           target: x86_64-pc-windows-gnu 
 
 
-      - name: Install MSYS2 and Pacman
+      - name: MSYS2_Pacman
         run: |
           winget install --id=The.OpenGroup.base-containers.MinGW-W64-ucrt-x86_64 --accept-package-agreements --source winget
           $msys2_root = "C:\msys64" # Default installation path. Adjust if different.
