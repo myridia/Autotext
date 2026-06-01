@@ -36,8 +36,10 @@ jobs:
      
       - name: Compile
         shell: msys2 {0}
-        run: |       
+        run: | 
+          export PATH="$PATH:/c/Users/runneradmin/.cargo/bin"
           export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+          cargo build
           # echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8NoBOM -Append
           cargo build --release 
           # pacman -S mingw-w64-ucrt-x86_64-gtk3 mingw-w64-ucrt-x86_64-pkg-config mingw-w64-ucrt-x86_64-openssl           
