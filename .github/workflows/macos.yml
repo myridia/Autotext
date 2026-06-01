@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write 
+  pull-requests: write
   issues: read
   packages: none
 
@@ -18,68 +18,64 @@ jobs:
     if: github.repository_owner == 'myridia'
 
     steps:
-      - name: Install Rust
+      - name: Install Rust and Dependencies
         run: |
-          brew install llvm tree 
-          brew install gtk+3 openssl pkg-config  
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          brew install llvm tree pkg-config glib gobject-introspection openssl gtk+3
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
           source $HOME/.cargo/env
           rustup target add x86_64-apple-darwin
-          rustup component add llvm-tools-preview 
+          rustup component add llvm-tools-preview
           export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
           export PKG_CONFIG_ALLOW_CROSS=1
-          
+          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+          export CC="/opt/homebrew/opt/llvm/bin/clang"
+          export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Compile 
+      - name: Compile Native macOS (ARM64)
         run: |
-          cargo build --release 
-          # export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
-          # cargo build --release  --target x86_64-apple-darwin 
+          cargo build --release
 
-      - name: CompileIntel
+      - name: Compile Intel macOS (x86_64)
         run: |
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
-          export PKG_CONFIG_ALLOW_CROSS=1
-          export PATH="/opt/homebrew/opt/llvm/bin:$PATH" 
-          export CC="/opt/homebrew/opt/llvm/bin/clang"
-          export CXX="/opt/homebrew/opt/llvm/bin/clang++"
           export RUSTFLAGS="-C linker=/usr/bin/ld"
           cargo build --release --target x86_64-apple-darwin
-          
 
-           
-      - name: List
+      - name: List Compiled Binaries
         run: |
           cd target
-          tree . 
-      - name: Rename
+          tree .
+
+      - name: Prepare App Bundles and DMGs
         run: |
-          cp target/release/autotext autotext_macos.app
-          # cp target/x86_64-apple-darwin/release/autotext autotext_macos_intel.app
+          # Native macOS (ARM64)
+          mkdir -p autotext_macos.app/Contents/MacOS
+          cp target/release/autotext autotext_macos.app/Contents/MacOS/autotext
           hdiutil create -volname "autotext_macos" -srcfolder "autotext_macos.app" -ov -format UDZO "autotext_macos.dmg"
-          # hdiutil create -volname "autotext_macos_intel" -srcfolder "autotext_macos_intel.app" -ov -format UDZO "autotext_macos_intel.dmg"
 
+          # Intel macOS (x86_64)
+          mkdir -p autotext_macos_intel.app/Contents/MacOS
+          cp target/x86_64-apple-darwin/release/autotext autotext_macos_intel.app/Contents/MacOS/autotext
+          hdiutil create -volname "autotext_macos_intel" -srcfolder "autotext_macos_intel.app" -ov -format UDZO "autotext_macos_intel.dmg"
 
-
-      - name: Release Intel 
-        if: github.repository_owner == 'myridiax'
+      - name: Release Intel
+        if: github.repository_owner == 'myridiax' && github.ref_type == 'tag' && success()
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: 'autotext_macos_intel.dmg'
           tag: ${{ github.ref }}
           overwrite: true
-          file_glob: true   
+          file_glob: true
 
       - name: Release Silicon
-        if: github.repository_owner == 'myridiax'
+        if: github.repository_owner == 'myridiax' && github.ref_type == 'tag' && success()
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: 'autotext_macos.dmg'
           tag: ${{ github.ref }}
           overwrite: true
-          file_glob: true 
-
+          file_glob: true
