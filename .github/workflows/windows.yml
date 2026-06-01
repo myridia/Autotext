@@ -33,15 +33,20 @@ jobs:
         with:
           update: true
           install: > 
-            mingw-w64-x86_64-pkg-config
-            mingw-w64-x86_64-glib2
-            mingw-w64-ucrt-x86_64-gtk3
-            mingw-w64-x86_64-pango
-            mingw-w64-x86_64-glib2
-            mingw-w64-x86_64-cairo
-            mingw-w64-x86_64-gdk-pixbuf2
-            mingw-w64-x86_64-gtk4
-            mingw-w64-x86_64-rust
+           mingw-w64-x86_64-pkg-config
+           mingw-w64-x86_64-glib2
+           mingw-w64-x86_64-gtk3
+           mingw-w64-x86_64-pango
+           mingw-w64-x86_64-cairo
+           mingw-w64-x86_64-gdk-pixbuf2
+           mingw-w64-x86_64-atk
+           mingw-w64-x86_64-rust
+           mingw-w64-x86_64-fribidi
+           mingw-w64-x86_64-graphite2
+           mingw-w64-x86_64-harfbuzz
+           mingw-w64-x86_64-pixman
+           mingw-w64-x86_64-libffi
+      
      
       - name: Compile
         shell: msys2 {0}
