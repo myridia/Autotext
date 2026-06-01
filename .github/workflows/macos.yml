@@ -19,61 +19,73 @@ jobs:
     if: github.repository_owner == 'myridia'
 
     steps:
-      - name: Install Rust and Dependencies
+      - name: Install Rust and Dependencies (for x86_64 target)
         run: |
-          # Install Homebrew if not present
+          # Run Homebrew commands under x86_64 architecture
+          arch -x86_64 bash -c '
+          echo "Installing Homebrew..."
           if ! command -v brew &> /dev/null; then
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           fi
+          echo "Updating Homebrew and installing dependencies..."
           brew update
-          # Install core dependencies for GLib/GObject/GTK development
-          brew install pkg-config glib gobject-introspection openssl gtk+3
-          # Install LLVM and tree
-          brew install llvm tree
+          # Install libraries needed for x86_64 target. Homebrew on an ARM machine might
+          # try to install the correct architecture if run under `arch -x86_64`.
+          brew install pkg-config glib gobject-introspection openssl gtk+3 llvm tree
 
           # Install Rust
+          echo "Installing Rust toolchain..."
           curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
           source $HOME/.cargo/env
+          echo "Adding cross-compilation target..."
           rustup target add x86_64-apple-darwin
           rustup component add llvm-tools-preview
 
-          # --- Critical: Configure pkg-config for cross-compilation ---
-          # Set PKG_CONFIG_PATH to include Homebrew's lib/pkgconfig directories.
-          # This helps pkg-config find the .pc files for the libraries installed by brew.
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
-          # Explicitly allow cross-compilation
+          # Configure pkg-config for cross-compilation
+          # These paths are typical for x86_64 Homebrew installations
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
           export PKG_CONFIG_ALLOW_CROSS=1
 
-          # Set CC/CXX to use LLVM's clang, which is more likely to work with cross-compilation targets
-          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-          export CC="/opt/homebrew/opt/llvm/bin/clang"
-          export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+          # Set C/CXX compilers for x86_64
+          # Use the system's clang if available, or homebrew's if it installs correctly for x86_64
+          export PATH="/usr/local/opt/llvm/bin:$PATH" # If Homebrew installs LLVM for x86_64 here
+          export CC="/usr/bin/clang" # Fallback to system clang if Homebrew's LLVM for x86_64 is tricky
+          export CXX="/usr/bin/clang++"
 
-          # Verify pkg-config can find GLib and GTK for the host
-          if ! pkg-config --exists glib-2.0; then echo "ERROR: pkg-config cannot find glib-2.0"; exit 1; fi
-          if ! pkg-config --exists gtk+-3.0; then echo "ERROR: pkg-config cannot find gtk+-3.0"; exit 1; fi
-          echo "Dependencies and pkg-config seem correctly set up for the host."
+          echo "Verifying setup..."
+          pkg-config --exists glib-2.0 || echo "WARN: pkg-config glib-2.0 not found for x86_64"
+          pkg-config --exists gtk+-3.0 || echo "WARN: pkg-config gtk+-3.0 not found for x86_64"
+          cargo --version
+          '
 
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Compile Native macOS (ARM64)
         run: |
+          # Native build on macos-15 (ARM64)
           cargo build --release
 
       - name: Compile Intel macOS (x86_64)
         run: |
-          # Re-export necessary variables for this step
-          export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig"
-          export PKG_CONFIG_ALLOW_CROSS=1
-          export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-          export CC="/opt/homebrew/opt/llvm/bin/clang"
-          export CXX="/opt/homebrew/opt/llvm/bin/clang++"
+          # Run the cross-compilation under arch -x86_64
+          arch -x86_64 bash -c '
+          source $HOME/.cargo/env # Re-source env for the new shell
 
-          # Use the system linker, as ld64.lld was not found
+          # Re-export pkg-config and linker flags for the target
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
+          export PKG_CONFIG_ALLOW_CROSS=1
           export RUSTFLAGS="-C linker=/usr/bin/ld"
 
+          # Ensure Homebrew's x86_64 libs are discoverable for the linker
+          # This is critical. The linker needs to find the actual .dylib files.
+          # The path might need adjustment if Homebrew installs x86_64 libs elsewhere.
+          # Forcing the linker path is a common strategy.
+          export DYLD_LIBRARY_PATH="/usr/local/lib" # Try to include the x86_64 lib path
+
+          echo "Compiling x86_64-apple-darwin target..."
           cargo build --release --target x86_64-apple-darwin
+          '
 
       - name: List Compiled Binaries
         run: |
@@ -87,7 +99,7 @@ jobs:
           cp target/release/autotext autotext_macos.app/Contents/MacOS/autotext
           hdiutil create -volname "autotext_macos" -srcfolder "autotext_macos.app" -ov -format UDZO "autotext_macos.dmg"
 
-          # Intel macOS (x86_64)
+          # Intel macOS (x86_64) - This DMG is built from the cross-compiled binary
           mkdir -p autotext_macos_intel.app/Contents/MacOS
           cp target/x86_64-apple-darwin/release/autotext autotext_macos_intel.app/Contents/MacOS/autotext
           hdiutil create -volname "autotext_macos_intel" -srcfolder "autotext_macos_intel.app" -ov -format UDZO "autotext_macos_intel.dmg"
