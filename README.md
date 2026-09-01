@@ -1,3 +1,4 @@
+<img src="Autotext.svg" alt="Autotext" width="120">
 
 #Install 
 1.
